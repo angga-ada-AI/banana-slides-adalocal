@@ -1,0 +1,175 @@
+{
+  "id": "banana-slides",
+  "nama": "Banana Slides",
+  "deskripsi": "Buat presentasi (PPT) dari satu kalimat ide, outline, atau dokumen — lalu sunting slide-nya lewat percakapan dan ekspor ke PPTX. Model teks & gambar sudah tersambung ke akun adaCODE-mu.",
+  "kategori": "Produktivitas",
+  "tag": "Work Efficiency",
+  "sumber": "https://github.com/Anionex/banana-slides",
+  "lisensi": "AGPL-3.0",
+  "sorot": [
+    "Dari ide, outline, dokumen, atau gambar menjadi slide yang masih bisa disunting — bukan gambar mati.",
+    "Sunting lewat percakapan: minta ganti judul, ringkas poin, atau ganti gaya, tanpa menggeser kotak satu per satu.",
+    "Ekspor ke PPTX, jadi hasilnya tetap bisa dibuka di PowerPoint/Google Slides.",
+    "Berjalan di komputermu: berkas, riwayat proyek, dan basis datanya tak pernah meninggalkan mesin ini."
+  ],
+  "perkiraan": {
+    "disk_mb": 1100,
+    "ram_mb": 350,
+    "catatan": "Diukur 21 Agu 2026 di Windows dari pemasangan nyata: lingkungan Python 766 MB + paket frontend 224 MB + sumber 42 MB. RAM saat berjalan menganggur 331 MB (backend 246 + frontend 85)."
+  },
+  "versi_manifes": 1,
+  "butuh_gpu": false,
+  "bisa_pindah_vps": true,
+  "os_didukung": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "prasyarat": [
+    {
+      "alat": "node",
+      "minimal": "18"
+    },
+    {
+      "alat": "uv"
+    },
+    {
+      "alat": "python",
+      "minimal": "3.12",
+      "catatan": "Dipatok 3.12 lewat `uv sync --python 3.12`: onnxruntime belum punya wheel untuk 3.14. uv mengunduh 3.12 sendiri (21 MB) bila belum ada."
+    }
+  ],
+  "pasang": [
+    {
+      "aksi": "log",
+      "pesan": "Mengunduh Banana Slides (±42 MB)…"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "curl -L -o sumber.tgz https://codeload.github.com/Anionex/banana-slides/tar.gz/refs/heads/main"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "tar -xzf sumber.tgz --strip-components=1"
+    },
+    {
+      "aksi": "shell",
+      "perintah_windows": "del /q sumber.tgz",
+      "perintah_unix": "rm -f sumber.tgz"
+    },
+    {
+      "aksi": "log",
+      "pesan": "Menyiapkan mesin AI (beberapa menit — paket Python cukup besar)…"
+    },
+    {
+      "aksi": "shell",
+      "perintah_windows": "set UV_DEFAULT_INDEX=https://pypi.org/simple && uv sync --python 3.12",
+      "perintah_unix": "UV_DEFAULT_INDEX=https://pypi.org/simple uv sync --python 3.12"
+    },
+    {
+      "aksi": "log",
+      "pesan": "Menyiapkan tampilan…"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "npm install --prefix frontend --no-audit --no-fund"
+    },
+    {
+      "aksi": "tulis",
+      "buat": "tambal-bahasa-id.py",
+      "teks": "\"\"\"Menjadikan Banana Slides berbahasa Indonesia sepenuhnya.\n\nApp ini hanya mengenal empat bahasa (zh/ja/en/auto). Nilai lain TIDAK ditolak —\nia diam-diam jatuh ke Mandarin, sehingga pengguna Indonesia mendapat slide\nberbahasa Mandarin tanpa satu pun pesan galat.\n\nEMPAT tempat harus ditambal, dan itu pelajarannya — menambal sebagian justru\nlebih buruk daripada tidak sama sekali:\n\n  1. daftar bahasa di prompt      -> isi jadi Indonesia\n  2. daftar putih API pengaturan  -> tanpa ini, sekali pengguna menekan Simpan\n                                     bahasanya kembali ke bawaan\n  3. nama ladang deskripsi        -> nama ikut masuk prompt; nama Mandarin\n                                     membuat model menulis isinya Mandarin.\n                                     WAJIB menyeluruh: kalau panduan di prompt\n                                     masih menyebut nama Mandarin sementara\n                                     ladang sudah Indonesia, model bimbang,\n                                     baris ladang tak terpisah, dan seluruhnya\n                                     jatuh ke blok teks lalu TERGAMBAR MENTAH\n                                     di slide (terbukti 21 Agu 2026).\n  4. penanda blok teks            -> kontrak backend<->frontend, diganti\n                                     bersama-sama di kedua sisi.\n\nAman dijalankan berulang. Bila bentuk berkas upstream berubah, tiap tambalan\nMELEWATI dgn pesan alih-alih memaksa — app tetap terpakai (jatuh ke `auto`).\n\"\"\"\nimport io\n\n# Nama Mandarin disusun dari kode karakter, bukan ditulis langsung: skrip ini\n# melewati beberapa lapis penyalinan (manifes JSON -> aksi tulis -> berkas), dan\n# escape yang kolaps di salah satu lapis sudah pernah merusak berkas ini.\nCN_GAMBAR = ''.join(map(chr, (0x914d, 0x56fe, 0x4e0e, 0x7d20, 0x6750)))\nCN_TATA = ''.join(map(chr, (0x7248, 0x5f0f, 0x4e0e, 0x91cd, 0x70b9)))\nCN_CATATAN = ''.join(map(chr, (0x6f14, 0x8bb2, 0x8005, 0x5907, 0x6ce8)))\nCN_TEKS = ''.join(map(chr, (0x9875, 0x9762, 0x6587, 0x5b57)))\nCN_AKHIR = CN_TEKS + ''.join(map(chr, (0x7ed3, 0x675f)))\n\nID_GAMBAR = 'Gambar & Materi'\nID_TATA = 'Tata Letak & Penekanan'\nID_CATATAN = 'Catatan Pembicara'\n\n\ndef baca(berkas):\n    try:\n        return io.open(berkas, encoding='utf-8').read()\n    except FileNotFoundError:\n        print('[tambal] %s tak ada - dilewati' % berkas)\n        return None\n\n\ndef tambal_daftar_bahasa():\n    \"\"\"1/4 — daftar bahasa yang dipakai menyusun prompt.\"\"\"\n    berkas = 'backend/services/prompts.py'\n    isi = baca(berkas)\n    if isi is None:\n        return\n    if \"'id': {\" in isi:\n        print('[tambal] 1/4 bahasa Indonesia sudah terdaftar')\n        return\n    penanda = \"    'auto': {\"\n    if penanda not in isi:\n        print('[tambal] 1/4 bentuk LANGUAGE_CONFIG berubah - dilewati')\n        return\n    entri = (\n        \"    'id': {\\n\"\n        \"        'name': 'Bahasa Indonesia',\\n\"\n        \"        'instruction': 'Tulis SELURUH keluaran dalam Bahasa Indonesia yang baku, \"\n        \"termasuk catatan pembicara dan keterangan tata letak.',\\n\"\n        \"        'ppt_text': 'Seluruh teks di dalam PPT harus Bahasa Indonesia.'\\n\"\n        \"    },\\n\"\n    )\n    io.open(berkas, 'w', encoding='utf-8').write(isi.replace(penanda, entri + penanda, 1))\n    print('[tambal] 1/4 bahasa Indonesia ditambahkan ke daftar bahasa')\n\n\ndef tambal_daftar_putih():\n    \"\"\"2/4 — daftar putih di API pengaturan (dipakai saat pengguna menyimpan).\"\"\"\n    berkas = 'backend/controllers/settings_controller.py'\n    isi = baca(berkas)\n    if isi is None:\n        return\n    lama = '[\"zh\", \"en\", \"ja\", \"auto\"]'\n    baru = '[\"zh\", \"en\", \"ja\", \"id\", \"auto\"]'\n    if baru in isi:\n        print('[tambal] 2/4 daftar putih pengaturan sudah memuat id')\n        return\n    if lama not in isi:\n        print('[tambal] 2/4 bentuk daftar putih berubah - dilewati')\n        return\n    isi = isi.replace(lama, baru).replace(\n        \"Output language must be 'zh', 'en', 'ja', or 'auto'\",\n        \"Output language must be 'zh', 'en', 'ja', 'id', or 'auto'\")\n    io.open(berkas, 'w', encoding='utf-8').write(isi)\n    print('[tambal] 2/4 id ditambahkan ke daftar putih pengaturan')\n\n\ndef tambal_nama_ladang():\n    \"\"\"3/4 — nama ladang deskripsi, DI SELURUH tempat yang menyebutnya.\"\"\"\n    peta = [(CN_GAMBAR, ID_GAMBAR), (CN_TATA, ID_TATA), (CN_CATATAN, ID_CATATAN)]\n    berkas = [\n        'backend/models/settings.py',\n        'backend/services/prompts.py',\n        'backend/services/ai_service.py',\n    ]\n    tersentuh = 0\n    for b in berkas:\n        isi = baca(b)\n        if isi is None:\n            continue\n        asli = isi\n        # Blok LEGACY_FIELD_EQUIV DILINDUNGI dari penggantian: isinya justru\n        # HARUS tetap nama Mandarin (ia peta \"nama lama -> nama sekarang\").\n        # Tanpa perlindungan ini, jalankan-ulang memakan petanya sendiri lalu\n        # menambahkannya lagi - berkas membengkak tiap kali app diperbarui.\n        awal = isi.find('LEGACY_FIELD_EQUIV = {')\n        if awal == -1:\n            kepala, blok, ekor = isi, '', ''\n        else:\n            tutup = chr(10) + '    }'\n            akhir = isi.find(tutup, awal)\n            akhir = len(isi) if akhir == -1 else akhir + len(tutup)\n            kepala, blok, ekor = isi[:awal], isi[awal:akhir], isi[akhir:]\n        for cn, idn in peta:\n            kepala = kepala.replace(cn, idn)\n            ekor = ekor.replace(cn, idn)\n        isi = kepala + blok + ekor\n        if isi != asli:\n            io.open(b, 'w', encoding='utf-8').write(isi)\n            tersentuh += 1\n\n    # Nama Mandarin didaftarkan sebagai nama LAMA supaya keluaran model yang\n    # masih memakainya tetap dipisah dgn benar — mekanisme milik upstream\n    # (LEGACY_FIELD_EQUIV), dipakai persis seperti tujuannya.\n    b = 'backend/models/settings.py'\n    isi = baca(b)\n    if isi is not None and 'LEGACY_FIELD_EQUIV = {' in isi and CN_GAMBAR not in isi:\n        garis = [\n            'LEGACY_FIELD_EQUIV = {',\n            '        # Nama Mandarin bawaan upstream: keluaran model yang masih',\n            '        # memakainya tetap terpisah, tidak jatuh ke blok teks lalu',\n            '        # tergambar mentah di slide.',\n            \"        '%s': '%s',\" % (CN_GAMBAR, ID_GAMBAR),\n            \"        '%s': '%s',\" % (CN_TATA, ID_TATA),\n            \"        '%s': '%s',\" % (CN_CATATAN, ID_CATATAN),\n            '',\n        ]\n        isi = isi.replace('LEGACY_FIELD_EQUIV = {\\n', '\\n'.join(garis), 1)\n        io.open(b, 'w', encoding='utf-8').write(isi)\n        print('[tambal] 3/4 nama Mandarin didaftarkan sebagai nama lama')\n\n    print('[tambal] 3/4 nama ladang: %d berkas disesuaikan' % tersentuh)\n\n\ndef tambal_penanda():\n    \"\"\"4/4 — penanda blok teks halaman (kontrak backend<->frontend).\"\"\"\n    berkas = [\n        'backend/services/prompts.py',\n        'backend/services/ai_service.py',\n        'backend/models/settings.py',\n        'frontend/src/components/preview/DescriptionCard.tsx',\n        'frontend/src/components/preview/PagePropertiesDrawer.tsx',\n    ]\n    # Yang PANJANG dulu: penanda \"akhir\" memuat penanda \"teks\".\n    urut = [(CN_AKHIR, 'AKHIR TEKS HALAMAN'), (CN_TEKS, 'TEKS HALAMAN')]\n    tersentuh = 0\n    for b in berkas:\n        isi = baca(b)\n        if isi is None:\n            continue\n        asli = isi\n        for lama, baru in urut:\n            isi = isi.replace(lama, baru)\n        if isi != asli:\n            io.open(b, 'w', encoding='utf-8').write(isi)\n            tersentuh += 1\n    print('[tambal] 4/4 penanda blok teks: %d berkas disesuaikan' % tersentuh)\n\n\ndef tambal_protokol_gambar():\n    \"\"\"5/5 - protokol API gambar: paksa jalur images, bukan chat.\n\n    Bawaannya `auto`, dan `auto` memilih jalur CHAT untuk model kami -\n    gerbang adaCODE lalu menolak: \"model adaimage-2.1-flash not compatible\"\n    (503). Ini kolom DB tanpa pembaca env, jadi tak bisa disetel dari manifes;\n    bawaannya yang diubah supaya pemasangan BARU langsung benar.\n    \"\"\"\n    berkas = 'backend/models/settings.py'\n    isi = baca(berkas)\n    if isi is None:\n        return\n    lama = \"'openai_image_api_protocol': self._val('openai_image_api_protocol', d) or 'auto'\"\n    baru = \"'openai_image_api_protocol': self._val('openai_image_api_protocol', d) or 'images'\"\n    if baru in isi:\n        print('[tambal] 5/5 protokol gambar sudah images')\n        return\n    if lama not in isi:\n        print('[tambal] 5/5 bentuk bawaan protokol berubah - dilewati')\n        return\n    io.open(berkas, 'w', encoding='utf-8').write(isi.replace(lama, baru, 1))\n    print('[tambal] 5/5 protokol gambar dipaksa ke images')\n\n\ntambal_daftar_bahasa()\ntambal_daftar_putih()\ntambal_nama_ladang()\ntambal_penanda()\ntambal_protokol_gambar()\n"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "python tambal-bahasa-id.py"
+    },
+    {
+      "aksi": "tulis",
+      "buat": ".env",
+      "teks": "# Ditulis pemasang adaCODE. Port dipatok jauh dari 3000/5173/8000 supaya\n# tak bertabrakan dengan server pengembangan yang mungkin sedang kamu jalankan.\nBACKEND_PORT=42021\nFRONTEND_PORT=42022\n"
+    },
+    {
+      "aksi": "tulis",
+      "buat": "mulai.js",
+      "teks": "/**\n * Peluncur adaLOCAL untuk Banana Slides.\n *\n * App ini DUA proses: backend (AI + basis data) dan tampilan yang meneruskan\n * panggilan `/api` ke backend. Pemasang adaLOCAL mengawasi SATU proses, jadi\n * berkas ini yang menyatukannya: menyalakan keduanya, meneruskan seluruh\n * keluaran apa adanya, dan MATI begitu salah satunya mati.\n *\n * Ia juga yang menentukan KAPAN app boleh disebut siap. Ini bukan hal sepele:\n * tampilan menyala dalam setengah detik sedangkan backend butuh belasan detik,\n * jadi kalau penanda siap diambil dari tampilan saja, pelanggan membuka app\n * tepat pada saat setiap panggilan masih menjawab 500 - dan menyimpulkan\n * app-nya rusak. Terbukti di uji lokal 21 Agu: 15 detik pertama sesudah\n * \"siap\" seluruhnya HTTP 500. Karena itu baris siap di bawah baru dicetak\n * setelah backend DAN tampilan sama-sama menjawab.\n */\nconst { spawn } = require('child_process');\nconst path = require('path');\nconst http = require('http');\n\nconst akar = __dirname;\nconst portBackend = process.env.BACKEND_PORT || '42021';\nconst portTampilan = process.env.FRONTEND_PORT || '42022';\nconst anak = [];\nlet sedangTutup = false;\n\nfunction nyalakan(nama, perintah, argumen, cwd) {\n  // shell:true wajib di Windows: `npm` di sana adalah `npm.cmd`.\n  const p = spawn(perintah, argumen, { cwd, shell: true, env: process.env });\n  p.stdout.on('data', (d) => process.stdout.write(d));\n  p.stderr.on('data', (d) => process.stdout.write(d));\n  p.on('exit', (kode) => {\n    if (sedangTutup) return;\n    console.log(`[adaLOCAL] ${nama} berhenti (kode ${kode}) - menutup sisanya.`);\n    tutup(kode === 0 ? 1 : kode || 1);\n  });\n  anak.push(p);\n  return p;\n}\n\nfunction tutup(kode) {\n  if (sedangTutup) return;\n  sedangTutup = true;\n  for (const p of anak) {\n    try { p.kill(); } catch { /* sudah mati */ }\n  }\n  setTimeout(() => process.exit(kode), 500);\n}\n\nfunction cek(port, jalur) {\n  return new Promise((selesai) => {\n    const permintaan = http.get(\n      { host: '127.0.0.1', port: Number(port), path: jalur, timeout: 3000 },\n      (r) => { r.resume(); selesai(r.statusCode > 0 && r.statusCode < 500); }\n    );\n    permintaan.on('error', () => selesai(false));\n    permintaan.on('timeout', () => { permintaan.destroy(); selesai(false); });\n  });\n}\n\nasync function tungguSiap() {\n  // Batas 6 menit: pemasang punya batasnya sendiri, ini cuma penjaga supaya\n  // proses ini tak menunggu selamanya kalau backend gagal diam-diam.\n  for (let i = 0; i < 120; i++) {\n    if (sedangTutup) return;\n    const [backendSiap, tampilanSiap] = await Promise.all([\n      cek(portBackend, '/health'),\n      cek(portTampilan, '/'),\n    ]);\n    if (backendSiap && tampilanSiap) {\n      console.log(`[adaLOCAL] SIAP DIPAKAI di http://127.0.0.1:${portTampilan}`);\n      return;\n    }\n    await new Promise((r) => setTimeout(r, 3000));\n  }\n  console.log('[adaLOCAL] backend belum menjawab sesudah 6 menit - lihat baris galat di atas.');\n}\n\nprocess.on('SIGINT', () => tutup(0));\nprocess.on('SIGTERM', () => tutup(0));\n\n// Backend dulu: tampilan yang menyala lebih dulu hanya memperlihatkan galat\n// proxy sampai backend siap, dan itu terlihat seperti app rusak.\nnyalakan('backend', 'python', ['app.py'], path.join(akar, 'backend'));\nnyalakan('tampilan', 'npm', ['run', 'dev'], path.join(akar, 'frontend'));\ntungguSiap();\n"
+    },
+    {
+      "aksi": "log",
+      "pesan": "Banana Slides terpasang."
+    }
+  ],
+  "jalan": {
+    "daemon": true,
+    "venv": ".venv",
+    "perintah": "node mulai.js",
+    "tanda_siap": "SIAP DIPAKAI di",
+    "url_cadangan": "http://127.0.0.1:42022",
+    "batas_tunggu_detik": 420,
+    "env": {
+      "AI_PROVIDER_FORMAT": "openai",
+      "BACKEND_PORT": "42021",
+      "FRONTEND_PORT": "42022",
+      "IMAGE_CAPTION_MODEL": "claude-sonnet-4-6",
+      "IMAGE_MODEL": "adaimage-2.1-flash",
+      "OPENAI_API_BASE": "{{gateway_adacode}}",
+      "OPENAI_API_KEY": "{{kunci_api_pelanggan}}",
+      "OUTPUT_LANGUAGE": "id",
+      "TEXT_MODEL": "claude-sonnet-4-6",
+      "UPLOAD_FOLDER": "{{folder_app}}/uploads"
+    }
+  },
+  "perbarui": [
+    {
+      "aksi": "log",
+      "pesan": "Memperbarui Banana Slides…"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "curl -L -o sumber.tgz https://codeload.github.com/Anionex/banana-slides/tar.gz/refs/heads/main"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "tar -xzf sumber.tgz --strip-components=1"
+    },
+    {
+      "aksi": "shell",
+      "perintah_windows": "del /q sumber.tgz",
+      "perintah_unix": "rm -f sumber.tgz"
+    },
+    {
+      "aksi": "shell",
+      "perintah_windows": "set UV_DEFAULT_INDEX=https://pypi.org/simple && uv sync --python 3.12",
+      "perintah_unix": "UV_DEFAULT_INDEX=https://pypi.org/simple uv sync --python 3.12"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "npm install --prefix frontend --no-audit --no-fund"
+    },
+    {
+      "aksi": "tulis",
+      "buat": "tambal-bahasa-id.py",
+      "teks": "\"\"\"Menjadikan Banana Slides berbahasa Indonesia sepenuhnya.\n\nApp ini hanya mengenal empat bahasa (zh/ja/en/auto). Nilai lain TIDAK ditolak —\nia diam-diam jatuh ke Mandarin, sehingga pengguna Indonesia mendapat slide\nberbahasa Mandarin tanpa satu pun pesan galat.\n\nEMPAT tempat harus ditambal, dan itu pelajarannya — menambal sebagian justru\nlebih buruk daripada tidak sama sekali:\n\n  1. daftar bahasa di prompt      -> isi jadi Indonesia\n  2. daftar putih API pengaturan  -> tanpa ini, sekali pengguna menekan Simpan\n                                     bahasanya kembali ke bawaan\n  3. nama ladang deskripsi        -> nama ikut masuk prompt; nama Mandarin\n                                     membuat model menulis isinya Mandarin.\n                                     WAJIB menyeluruh: kalau panduan di prompt\n                                     masih menyebut nama Mandarin sementara\n                                     ladang sudah Indonesia, model bimbang,\n                                     baris ladang tak terpisah, dan seluruhnya\n                                     jatuh ke blok teks lalu TERGAMBAR MENTAH\n                                     di slide (terbukti 21 Agu 2026).\n  4. penanda blok teks            -> kontrak backend<->frontend, diganti\n                                     bersama-sama di kedua sisi.\n\nAman dijalankan berulang. Bila bentuk berkas upstream berubah, tiap tambalan\nMELEWATI dgn pesan alih-alih memaksa — app tetap terpakai (jatuh ke `auto`).\n\"\"\"\nimport io\n\n# Nama Mandarin disusun dari kode karakter, bukan ditulis langsung: skrip ini\n# melewati beberapa lapis penyalinan (manifes JSON -> aksi tulis -> berkas), dan\n# escape yang kolaps di salah satu lapis sudah pernah merusak berkas ini.\nCN_GAMBAR = ''.join(map(chr, (0x914d, 0x56fe, 0x4e0e, 0x7d20, 0x6750)))\nCN_TATA = ''.join(map(chr, (0x7248, 0x5f0f, 0x4e0e, 0x91cd, 0x70b9)))\nCN_CATATAN = ''.join(map(chr, (0x6f14, 0x8bb2, 0x8005, 0x5907, 0x6ce8)))\nCN_TEKS = ''.join(map(chr, (0x9875, 0x9762, 0x6587, 0x5b57)))\nCN_AKHIR = CN_TEKS + ''.join(map(chr, (0x7ed3, 0x675f)))\n\nID_GAMBAR = 'Gambar & Materi'\nID_TATA = 'Tata Letak & Penekanan'\nID_CATATAN = 'Catatan Pembicara'\n\n\ndef baca(berkas):\n    try:\n        return io.open(berkas, encoding='utf-8').read()\n    except FileNotFoundError:\n        print('[tambal] %s tak ada - dilewati' % berkas)\n        return None\n\n\ndef tambal_daftar_bahasa():\n    \"\"\"1/4 — daftar bahasa yang dipakai menyusun prompt.\"\"\"\n    berkas = 'backend/services/prompts.py'\n    isi = baca(berkas)\n    if isi is None:\n        return\n    if \"'id': {\" in isi:\n        print('[tambal] 1/4 bahasa Indonesia sudah terdaftar')\n        return\n    penanda = \"    'auto': {\"\n    if penanda not in isi:\n        print('[tambal] 1/4 bentuk LANGUAGE_CONFIG berubah - dilewati')\n        return\n    entri = (\n        \"    'id': {\\n\"\n        \"        'name': 'Bahasa Indonesia',\\n\"\n        \"        'instruction': 'Tulis SELURUH keluaran dalam Bahasa Indonesia yang baku, \"\n        \"termasuk catatan pembicara dan keterangan tata letak.',\\n\"\n        \"        'ppt_text': 'Seluruh teks di dalam PPT harus Bahasa Indonesia.'\\n\"\n        \"    },\\n\"\n    )\n    io.open(berkas, 'w', encoding='utf-8').write(isi.replace(penanda, entri + penanda, 1))\n    print('[tambal] 1/4 bahasa Indonesia ditambahkan ke daftar bahasa')\n\n\ndef tambal_daftar_putih():\n    \"\"\"2/4 — daftar putih di API pengaturan (dipakai saat pengguna menyimpan).\"\"\"\n    berkas = 'backend/controllers/settings_controller.py'\n    isi = baca(berkas)\n    if isi is None:\n        return\n    lama = '[\"zh\", \"en\", \"ja\", \"auto\"]'\n    baru = '[\"zh\", \"en\", \"ja\", \"id\", \"auto\"]'\n    if baru in isi:\n        print('[tambal] 2/4 daftar putih pengaturan sudah memuat id')\n        return\n    if lama not in isi:\n        print('[tambal] 2/4 bentuk daftar putih berubah - dilewati')\n        return\n    isi = isi.replace(lama, baru).replace(\n        \"Output language must be 'zh', 'en', 'ja', or 'auto'\",\n        \"Output language must be 'zh', 'en', 'ja', 'id', or 'auto'\")\n    io.open(berkas, 'w', encoding='utf-8').write(isi)\n    print('[tambal] 2/4 id ditambahkan ke daftar putih pengaturan')\n\n\ndef tambal_nama_ladang():\n    \"\"\"3/4 — nama ladang deskripsi, DI SELURUH tempat yang menyebutnya.\"\"\"\n    peta = [(CN_GAMBAR, ID_GAMBAR), (CN_TATA, ID_TATA), (CN_CATATAN, ID_CATATAN)]\n    berkas = [\n        'backend/models/settings.py',\n        'backend/services/prompts.py',\n        'backend/services/ai_service.py',\n    ]\n    tersentuh = 0\n    for b in berkas:\n        isi = baca(b)\n        if isi is None:\n            continue\n        asli = isi\n        # Blok LEGACY_FIELD_EQUIV DILINDUNGI dari penggantian: isinya justru\n        # HARUS tetap nama Mandarin (ia peta \"nama lama -> nama sekarang\").\n        # Tanpa perlindungan ini, jalankan-ulang memakan petanya sendiri lalu\n        # menambahkannya lagi - berkas membengkak tiap kali app diperbarui.\n        awal = isi.find('LEGACY_FIELD_EQUIV = {')\n        if awal == -1:\n            kepala, blok, ekor = isi, '', ''\n        else:\n            tutup = chr(10) + '    }'\n            akhir = isi.find(tutup, awal)\n            akhir = len(isi) if akhir == -1 else akhir + len(tutup)\n            kepala, blok, ekor = isi[:awal], isi[awal:akhir], isi[akhir:]\n        for cn, idn in peta:\n            kepala = kepala.replace(cn, idn)\n            ekor = ekor.replace(cn, idn)\n        isi = kepala + blok + ekor\n        if isi != asli:\n            io.open(b, 'w', encoding='utf-8').write(isi)\n            tersentuh += 1\n\n    # Nama Mandarin didaftarkan sebagai nama LAMA supaya keluaran model yang\n    # masih memakainya tetap dipisah dgn benar — mekanisme milik upstream\n    # (LEGACY_FIELD_EQUIV), dipakai persis seperti tujuannya.\n    b = 'backend/models/settings.py'\n    isi = baca(b)\n    if isi is not None and 'LEGACY_FIELD_EQUIV = {' in isi and CN_GAMBAR not in isi:\n        garis = [\n            'LEGACY_FIELD_EQUIV = {',\n            '        # Nama Mandarin bawaan upstream: keluaran model yang masih',\n            '        # memakainya tetap terpisah, tidak jatuh ke blok teks lalu',\n            '        # tergambar mentah di slide.',\n            \"        '%s': '%s',\" % (CN_GAMBAR, ID_GAMBAR),\n            \"        '%s': '%s',\" % (CN_TATA, ID_TATA),\n            \"        '%s': '%s',\" % (CN_CATATAN, ID_CATATAN),\n            '',\n        ]\n        isi = isi.replace('LEGACY_FIELD_EQUIV = {\\n', '\\n'.join(garis), 1)\n        io.open(b, 'w', encoding='utf-8').write(isi)\n        print('[tambal] 3/4 nama Mandarin didaftarkan sebagai nama lama')\n\n    print('[tambal] 3/4 nama ladang: %d berkas disesuaikan' % tersentuh)\n\n\ndef tambal_penanda():\n    \"\"\"4/4 — penanda blok teks halaman (kontrak backend<->frontend).\"\"\"\n    berkas = [\n        'backend/services/prompts.py',\n        'backend/services/ai_service.py',\n        'backend/models/settings.py',\n        'frontend/src/components/preview/DescriptionCard.tsx',\n        'frontend/src/components/preview/PagePropertiesDrawer.tsx',\n    ]\n    # Yang PANJANG dulu: penanda \"akhir\" memuat penanda \"teks\".\n    urut = [(CN_AKHIR, 'AKHIR TEKS HALAMAN'), (CN_TEKS, 'TEKS HALAMAN')]\n    tersentuh = 0\n    for b in berkas:\n        isi = baca(b)\n        if isi is None:\n            continue\n        asli = isi\n        for lama, baru in urut:\n            isi = isi.replace(lama, baru)\n        if isi != asli:\n            io.open(b, 'w', encoding='utf-8').write(isi)\n            tersentuh += 1\n    print('[tambal] 4/4 penanda blok teks: %d berkas disesuaikan' % tersentuh)\n\n\ndef tambal_protokol_gambar():\n    \"\"\"5/5 - protokol API gambar: paksa jalur images, bukan chat.\n\n    Bawaannya `auto`, dan `auto` memilih jalur CHAT untuk model kami -\n    gerbang adaCODE lalu menolak: \"model adaimage-2.1-flash not compatible\"\n    (503). Ini kolom DB tanpa pembaca env, jadi tak bisa disetel dari manifes;\n    bawaannya yang diubah supaya pemasangan BARU langsung benar.\n    \"\"\"\n    berkas = 'backend/models/settings.py'\n    isi = baca(berkas)\n    if isi is None:\n        return\n    lama = \"'openai_image_api_protocol': self._val('openai_image_api_protocol', d) or 'auto'\"\n    baru = \"'openai_image_api_protocol': self._val('openai_image_api_protocol', d) or 'images'\"\n    if baru in isi:\n        print('[tambal] 5/5 protokol gambar sudah images')\n        return\n    if lama not in isi:\n        print('[tambal] 5/5 bentuk bawaan protokol berubah - dilewati')\n        return\n    io.open(berkas, 'w', encoding='utf-8').write(isi.replace(lama, baru, 1))\n    print('[tambal] 5/5 protokol gambar dipaksa ke images')\n\n\ntambal_daftar_bahasa()\ntambal_daftar_putih()\ntambal_nama_ladang()\ntambal_penanda()\ntambal_protokol_gambar()\n"
+    },
+    {
+      "aksi": "shell",
+      "perintah": "python tambal-bahasa-id.py"
+    }
+  ],
+  "setel_ulang": [
+    {
+      "aksi": "log",
+      "pesan": "Menghapus proyek & basis data Banana Slides (berkas app tetap)…"
+    },
+    {
+      "aksi": "folder",
+      "kosongkan": "backend/instance"
+    },
+    {
+      "aksi": "folder",
+      "kosongkan": "uploads"
+    }
+  ],
+  "catatan": "Python DIPATOK 3.12 (bukan sekadar \">=3.10\" milik upstream) — uv memilih Python terbaru di mesin, dan onnxruntime belum punya wheel untuk 3.14 sehingga pemasangan gagal di mesin yang Python-nya baru. Indeks paket diarahkan ke PyPI resmi, bukan mirror pihak ketiga bawaan upstream; paket & hash-nya identik (160 paket, 2.294 hash sama), hanya sumber unduhnya yang berpindah. Basis datanya SQLite di dalam folder app — tak ada server basis data terpisah. Port 42021/42022 dipatok di .env supaya tak bertabrakan dengan server pengembangan. Ekspor video bernarasi butuh FFmpeg (opsional, tidak dipasang); mengunggah PPTX untuk 'perbarui tampilan' butuh LibreOffice (opsional) — unggah PDF tidak memerlukannya. Bahasa keluaran memakai `auto` (app hanya mengenal zh/ja/en/auto — nilai lain jatuh ke Mandarin), sehingga slide mengikuti bahasa yang diketik pengguna. Rantai pasang→jalan→HTTP 200 diuji nyata di Windows 21 Agu 2026; macOS & Linux memakai perintah yang sama (curl/tar/uv/npm) tapi belum diuji satu per satu.",
+  "ikon": "banana-slides.png",
+  "gambar": "gambar.jpg"
+}
